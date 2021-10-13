@@ -32,8 +32,6 @@ public class ForkJoinSolver extends SequentialSolver {
     // thread safe ArrayList
     private final CopyOnWriteArrayList<ForkJoinTask<List<Integer>>> threads = new CopyOnWriteArrayList<>();
 
-    private boolean goalFound = false;
-
     /**
      * initialize with empty thread safe data structures
      */
@@ -45,7 +43,6 @@ public class ForkJoinSolver extends SequentialSolver {
         // skip list map for predecessors
         predecessor = new ConcurrentSkipListMap<>();
     }
-
 
     /**
      * Creates a solver that searches in <code>maze</code> from the
@@ -60,7 +57,6 @@ public class ForkJoinSolver extends SequentialSolver {
         player = maze.newPlayer(current);
         initStructures();
     }
-
 
     /**
      * Creates a solver that searches in <code>maze</code> from the
@@ -88,11 +84,11 @@ public class ForkJoinSolver extends SequentialSolver {
      * nodes.
      *
      * @param maze        the maze to be searched
-     * @param forkAfter   the number of steps (visited nodes) after
-     *                    which a parallel task is forked; if
-     *                    <code>forkAfter &lt;= 0</code> the solver never
-     *                    forks new tasks
+     * @param forkAfter   the number of steps (visited nodes) after which a parallel task is forked; if
+     *                    <code>forkAfter <= 0</code> the solver never forks new tasks
      * @param current     current node ID
+     * @param visited     set of already visited node IDs
+     * @param predecessor mapped predecessor, <fromID, toID>
      */
     public ForkJoinSolver(Maze maze, int current, int forkAfter, Set<Integer> visited, Map<Integer, Integer> predecessor) {
         super(maze);
@@ -102,7 +98,6 @@ public class ForkJoinSolver extends SequentialSolver {
         this.visited = visited;
         this.predecessor = predecessor;
     }
-
 
     /**
      * Searches for and returns the path, as a list of node
@@ -116,12 +111,9 @@ public class ForkJoinSolver extends SequentialSolver {
      *           be found.
      */
     @Override
-    public List<Integer> compute()
-    {
-
+    public List<Integer> compute() {
         return parallelSearch(current);
     }
-
 
     /**
      *
@@ -159,12 +151,10 @@ public class ForkJoinSolver extends SequentialSolver {
             Integer nextNode = unvisited.iterator().next();
             maze.move(player, nextNode);
             return parallelSearch(nextNode);
-        } else if (unvisited.size() > 1 ) {
+        } else
             for (Integer nextNode : unvisited) {
                 threads.add(new ForkJoinSolver(maze, nextNode, forkAfter, visited, predecessor).fork());
             }
-        } else
-            return null;
 
 
         // go through all lists of neighbors in threads doing work
