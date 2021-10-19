@@ -163,6 +163,8 @@ public class ForkJoinSolver extends SequentialSolver {
         } else
             for (Integer nextNode : unvisited) {
                 threads.add(new ForkJoinSolver(maze, nextNode, forkAfter, visited, predecessor).fork());
+                // debug
+                System.out.println("im a new thread");
             }
 
         // go through all lists of neighbors in threads doing work
@@ -174,9 +176,9 @@ public class ForkJoinSolver extends SequentialSolver {
                 path = partialResult;
             }
         }
-        // return path result
-        if (path == null)
+        if (path == null) // debug
             System.out.println("path is null!");
+        // return path result
         return path;
     }
 
