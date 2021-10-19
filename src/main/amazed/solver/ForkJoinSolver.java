@@ -10,6 +10,7 @@ import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ForkJoinTask;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * <code>ForkJoinSolver</code> implements a solver for
@@ -31,6 +32,8 @@ public class ForkJoinSolver extends SequentialSolver {
 
     // thread safe ArrayList
     private final CopyOnWriteArrayList<ForkJoinTask<List<Integer>>> threads = new CopyOnWriteArrayList<>();
+
+    private static AtomicBoolean GOAL_FOUND = new AtomicBoolean(false);
 
     /**
      * initialize with empty thread safe data structures
@@ -123,11 +126,17 @@ public class ForkJoinSolver extends SequentialSolver {
      *      null if not found
      */
     private List<Integer> parallelSearch(int current) {
+        if (GOAL_FOUND.get())
+            return null;
+
+        // add current node ID to visited list
         visited.add(current);
 
         // if current node is goal, return full path
-        if (maze.hasGoal(current))
+        if (maze.hasGoal(current)) {
+            GOAL_FOUND.set(true);
             return pathFromTo(start, current);
+        }
 
         // get all neighbors to set
         Set<Integer> neighbors = maze.neighbors(current);
@@ -156,18 +165,17 @@ public class ForkJoinSolver extends SequentialSolver {
                 threads.add(new ForkJoinSolver(maze, nextNode, forkAfter, visited, predecessor).fork());
             }
 
-
         // go through all lists of neighbors in threads doing work
         // join with respective partial result
         List<Integer> path = null;
         for (ForkJoinTask<List<Integer>> thread : threads) {
             List<Integer> partialResult = thread.join();
-            if (partialResult != null)
+            if (partialResult != null) {
                 path = partialResult;
+            }
         }
-
         // return path result
         return path;
-
     }
+
 }
