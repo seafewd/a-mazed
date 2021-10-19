@@ -175,6 +175,8 @@ public class ForkJoinSolver extends SequentialSolver {
             }
         }
         // return path result
+        if (path == null)
+            System.out.println("path is null!");
         return path;
     }
 
