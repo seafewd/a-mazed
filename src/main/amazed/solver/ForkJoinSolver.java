@@ -156,21 +156,23 @@ public class ForkJoinSolver extends SequentialSolver {
 
         // if number of unvisited nodes is less than forkAfter value, then 'just do it'
         // else fork with current data
-        if (unvisited.size() < forkAfter) {
+        if (unvisited.size() == 1) {
             Integer nextNode = unvisited.iterator().next();
             maze.move(player, nextNode);
             return parallelSearch(nextNode);
         } else
-            for (Integer nextNode : unvisited)
+            for (Integer nextNode : unvisited) {
                 threads.add(new ForkJoinSolver(maze, nextNode, forkAfter, visited, predecessor).fork());
+            }
 
         // go through all lists of neighbors in threads doing work
         // join with respective partial result
         List<Integer> path = null;
         for (ForkJoinTask<List<Integer>> thread : threads) {
             List<Integer> partialResult = thread.join();
-            if (partialResult != null)
+            if (partialResult != null) {
                 path = partialResult;
+            }
         }
         // return path result
         return path;
