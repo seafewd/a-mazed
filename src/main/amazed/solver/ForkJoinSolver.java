@@ -33,6 +33,9 @@ public class ForkJoinSolver extends SequentialSolver {
     // thread safe ArrayList
     private final CopyOnWriteArrayList<ForkJoinTask<List<Integer>>> threads = new CopyOnWriteArrayList<>();
 
+    private ConcurrentSkipListMap<Integer, Integer> predecessor;
+    private ConcurrentSkipListSet<Integer> visited;
+
     private static final AtomicBoolean GOAL_FOUND = new AtomicBoolean(false);
 
     /**
@@ -40,6 +43,9 @@ public class ForkJoinSolver extends SequentialSolver {
      */
     @Override
     protected void initStructures() {
+        // skip list set for visited nodes
+        super.initStructures();
+
         // skip list set for visited nodes
         visited = new ConcurrentSkipListSet<>();
 
@@ -93,7 +99,7 @@ public class ForkJoinSolver extends SequentialSolver {
      * @param visited     set of already visited node IDs
      * @param predecessor mapped predecessor, <fromID, toID>
      */
-    public ForkJoinSolver(Maze maze, int current, int forkAfter, Set<Integer> visited, Map<Integer, Integer> predecessor) {
+    public ForkJoinSolver(Maze maze, int current, int forkAfter, ConcurrentSkipListSet<Integer> visited, ConcurrentSkipListMap<Integer, Integer> predecessor) {
         super(maze);
         player = maze.newPlayer(current);
         this.current = current;
