@@ -4,12 +4,9 @@ import amazed.maze.Maze;
 
 import java.util.List;
 import java.util.ArrayList;
-import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.ForkJoinTask;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
@@ -24,20 +21,15 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 public class ForkJoinSolver extends SequentialSolver {
 
-    // ID of current node
-    private final int current;
-
     // ID of player
     private final int player;
 
     // thread safe ArrayList
-    private final CopyOnWriteArrayList<ForkJoinTask<List<Integer>>> threads = new CopyOnWriteArrayList<>();
+    private final CopyOnWriteArrayList<ForkJoinSolver> threads = new CopyOnWriteArrayList<>();
 
     // atomic boolean as global flag for goal found - if this is true, stop working!
     private static final AtomicBoolean GOAL_FOUND = new AtomicBoolean(false);
 
-    private ConcurrentSkipListMap<Integer, Integer> predecessor;
-    private ConcurrentSkipListSet<Integer> visited;
 
     /**
      * initialize with empty thread safe data structures
@@ -47,11 +39,8 @@ public class ForkJoinSolver extends SequentialSolver {
 
         super.initStructures();
 
-        // skip list set for visited nodes
-        visited = new ConcurrentSkipListSet<>();
 
-        // skip list map for predecessors
-        predecessor = new ConcurrentSkipListMap<>();
+
     }
 
     /**
@@ -63,8 +52,8 @@ public class ForkJoinSolver extends SequentialSolver {
     public ForkJoinSolver(Maze maze)
     {
         super(maze);
-        current = start;
-        player = maze.newPlayer(current);
+        this.player = maze.newPlayer(start);
+        this.visited = new ConcurrentSkipListSet<>();
         initStructures();
     }
 
@@ -83,7 +72,7 @@ public class ForkJoinSolver extends SequentialSolver {
     {
         super(maze);
         player = maze.newPlayer(start);
-        current = start;
+        this.start = start;
         this.forkAfter = forkAfter;
         initStructures();
     }
@@ -96,17 +85,15 @@ public class ForkJoinSolver extends SequentialSolver {
      * @param maze        the maze to be searched
      * @param forkAfter   the number of steps (visited nodes) after which a parallel task is forked; if
      *                    <code>forkAfter <= 0</code> the solver never forks new tasks
-     * @param current     current node ID
+     *
      * @param visited     set of already visited node IDs
-     * @param predecessor mapped predecessor, <fromID, toID>
      */
-    public ForkJoinSolver(Maze maze, int current, int forkAfter, ConcurrentSkipListSet<Integer> visited, ConcurrentSkipListMap<Integer, Integer> predecessor) {
+    public ForkJoinSolver(Maze maze, int player, int start, int forkAfter, Set<Integer> visited) {
         super(maze);
-        player = maze.newPlayer(current);
-        this.current = current;
+        this.start = start;
         this.forkAfter = forkAfter;
         this.visited = visited;
-        this.predecessor = predecessor;
+        this.player = player;
     }
 
     /**
@@ -122,7 +109,7 @@ public class ForkJoinSolver extends SequentialSolver {
      */
     @Override
     public List<Integer> compute() {
-        return parallelSearch(current);
+        return parallelSearch(start);
     }
 
     /**
@@ -137,11 +124,14 @@ public class ForkJoinSolver extends SequentialSolver {
             return null;
 
         // add current node ID to visited list
-        visited.add(current);
+        if (!visited.add(current))
+            return null;
+
 
         // if current node is goal, set global flag and return full path
         if (maze.hasGoal(current)) {
             GOAL_FOUND.set(true);
+            waitForSolvers();
             return pathFromTo(start, current);
         }
 
@@ -158,7 +148,6 @@ public class ForkJoinSolver extends SequentialSolver {
             if (!visited.contains(neighbor)) {
                 unvisited.add(neighbor);
                 visited.add(neighbor);
-                predecessor.put(neighbor, current);
             }
         }
 
@@ -168,23 +157,36 @@ public class ForkJoinSolver extends SequentialSolver {
             Integer nextNode = unvisited.iterator().next();
             maze.move(player, nextNode);
             return parallelSearch(nextNode);
-        } else
+        } else {
             for (Integer nextNode : unvisited) {
-                threads.add(new ForkJoinSolver(maze, nextNode, forkAfter, visited, predecessor).fork());
-            }
-
-        // go through all lists of neighbors in threads doing work
-        // join with respective partial result
-        List<Integer> path = null;
-        for (ForkJoinTask<List<Integer>> thread : threads) {
-            List<Integer> partialResult = thread.join();
-            if (partialResult != null) {
-                path = partialResult;
+                predecessor.put(nextNode, current);
+                int newPlayer = maze.newPlayer(nextNode);
+                ForkJoinSolver newSolver = new ForkJoinSolver(maze, forkAfter, newPlayer, nextNode, visited);
+                threads.add(newSolver);
+                newSolver.fork();
             }
         }
+        // go through all lists of neighbors in threads doing work
+        // join with respective partial result
+        List<Integer> pathToGoal = waitForSolvers();
+        if (pathToGoal != null) {
+            Integer threadStartNode = pathToGoal.get(0);
+            List<Integer> pathFromStart = pathFromTo(start, threadStartNode);
+            pathFromStart.addAll(pathToGoal);
+            System.out.println("path??" + pathFromStart);
+            return pathFromStart;
+        }
+        return null;
+    }
 
+    private List<Integer> waitForSolvers() {
+        List<Integer> path = null;
 
-        // return path result
+        for (ForkJoinSolver thread : threads) {
+            List<Integer> partialResult = thread.join();
+            if (partialResult != null)
+                path = partialResult;
+        }
         return path;
     }
 
