@@ -33,20 +33,13 @@ public class ForkJoinSolver extends SequentialSolver {
     // thread safe ArrayList
     private final CopyOnWriteArrayList<ForkJoinTask<List<Integer>>> threads = new CopyOnWriteArrayList<>();
 
-    // atomic boolean as global flag for goal found - if this is true, stop working!
     private static final AtomicBoolean GOAL_FOUND = new AtomicBoolean(false);
-
-    private ConcurrentSkipListMap<Integer, Integer> predecessor;
-    private ConcurrentSkipListSet<Integer> visited;
 
     /**
      * initialize with empty thread safe data structures
      */
     @Override
     protected void initStructures() {
-
-        super.initStructures();
-
         // skip list set for visited nodes
         visited = new ConcurrentSkipListSet<>();
 
@@ -100,7 +93,7 @@ public class ForkJoinSolver extends SequentialSolver {
      * @param visited     set of already visited node IDs
      * @param predecessor mapped predecessor, <fromID, toID>
      */
-    public ForkJoinSolver(Maze maze, int current, int forkAfter, ConcurrentSkipListSet<Integer> visited, ConcurrentSkipListMap<Integer, Integer> predecessor) {
+    public ForkJoinSolver(Maze maze, int current, int forkAfter, Set<Integer> visited, Map<Integer, Integer> predecessor) {
         super(maze);
         player = maze.newPlayer(current);
         this.current = current;
@@ -125,6 +118,17 @@ public class ForkJoinSolver extends SequentialSolver {
         return parallelSearch(current);
     }
 
+
+    private List<Integer> waitForOtherSolvers() {
+        List<Integer> result = null;
+
+        for (ForkJoinTask<List<Integer>> thread : threads) {
+            List<Integer> partialPath = thread.join();
+            if (partialPath != null) result = partialPath;
+        }
+        return result;
+    }
+
     /**
      *
      * @param current current ID of node
@@ -139,7 +143,7 @@ public class ForkJoinSolver extends SequentialSolver {
         // add current node ID to visited list
         visited.add(current);
 
-        // if current node is goal, set global flag and return full path
+        // if current node is goal, return full path
         if (maze.hasGoal(current)) {
             GOAL_FOUND.set(true);
             return pathFromTo(start, current);
@@ -157,12 +161,11 @@ public class ForkJoinSolver extends SequentialSolver {
         for (Integer neighbor : neighbors) {
             if (!visited.contains(neighbor)) {
                 unvisited.add(neighbor);
-                visited.add(neighbor);
                 predecessor.put(neighbor, current);
             }
         }
 
-        // if work is small enough, 'just do it'
+        // if number of unvisited nodes is less than forkAfter value, then 'just do it'
         // else fork with current data
         if (unvisited.size() == 1) {
             Integer nextNode = unvisited.iterator().next();
@@ -171,21 +174,32 @@ public class ForkJoinSolver extends SequentialSolver {
         } else
             for (Integer nextNode : unvisited) {
                 threads.add(new ForkJoinSolver(maze, nextNode, forkAfter, visited, predecessor).fork());
+                // debug
+                System.out.println("im a new thread");
             }
+
+        List<Integer> pathToGoal = waitForOtherSolvers();
+
+        if (pathToGoal != null) {
+            int mid = pathToGoal.remove(0);
+            List<Integer> pathFromStart = pathFromTo(start, mid);
+            pathFromStart.addAll(pathToGoal);
+            return pathFromStart;
+        }
+        return null;
 
         // go through all lists of neighbors in threads doing work
         // join with respective partial result
-        List<Integer> path = null;
-        for (ForkJoinTask<List<Integer>> thread : threads) {
-            List<Integer> partialResult = thread.join();
-            if (partialResult != null) {
-                path = partialResult;
-            }
-        }
-
-
-        // return path result
-        return path;
+        // List<Integer> path = null;
+        // for (ForkJoinTask<List<Integer>> thread : threads) {
+        //     List<Integer> partialResult = thread.join();
+        //     if (partialResult != null) {
+        //         path = partialResult;
+        //     }
+        // }
+        // if (path == null) // debug
+        //     System.out.println("path is null!");
+        // // return path result
+        // return path;
     }
-
 }
