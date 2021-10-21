@@ -12,6 +12,19 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ForkJoinTask;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import amazed.maze.Maze;
+
+import java.util.concurrent.RecursiveTask;
+
+import java.util.List;
+import java.util.LinkedList;
+import java.util.Map;
+import java.util.HashMap;
+import java.util.Set;
+import java.util.HashSet;
+import java.util.Stack;
+import java.util.Collections;
+
 /**
  * <code>ForkJoinSolver</code> implements a solver for
  * <code>Maze</code> objects using a fork/join multi-thread
@@ -36,7 +49,7 @@ public class ForkJoinSolver extends SequentialSolver {
     private ConcurrentSkipListMap<Integer, Integer> predecessor;
     private ConcurrentSkipListSet<Integer> visited;
 
-    private static final AtomicBoolean GOAL_FOUND = new AtomicBoolean(false);
+    private static AtomicBoolean GOAL_FOUND = new AtomicBoolean(false);
 
     /**
      * initialize with empty thread safe data structures
@@ -124,17 +137,6 @@ public class ForkJoinSolver extends SequentialSolver {
         return parallelSearch(current);
     }
 
-
-    private List<Integer> waitForOtherSolvers() {
-        List<Integer> result = null;
-
-        for (ForkJoinTask<List<Integer>> thread : threads) {
-            List<Integer> partialPath = thread.join();
-            if (partialPath != null) result = partialPath;
-        }
-        return result;
-    }
-
     /**
      *
      * @param current current ID of node
@@ -152,6 +154,7 @@ public class ForkJoinSolver extends SequentialSolver {
         // if current node is goal, return full path
         if (maze.hasGoal(current)) {
             GOAL_FOUND.set(true);
+            joinThreads();
             return pathFromTo(start, current);
         }
 
@@ -181,10 +184,10 @@ public class ForkJoinSolver extends SequentialSolver {
             for (Integer nextNode : unvisited) {
                 threads.add(new ForkJoinSolver(maze, nextNode, forkAfter, visited, predecessor).fork());
                 // debug
-                System.out.println("im a new thread");
+                //System.out.println("im a new thread");
             }
 
-        List<Integer> pathToGoal = waitForOtherSolvers();
+        List<Integer> pathToGoal = joinThreads();
 
         if (pathToGoal != null) {
             int mid = pathToGoal.remove(0);
@@ -193,19 +196,44 @@ public class ForkJoinSolver extends SequentialSolver {
             return pathFromStart;
         }
         return null;
+    }
 
-        // go through all lists of neighbors in threads doing work
-        // join with respective partial result
-        // List<Integer> path = null;
-        // for (ForkJoinTask<List<Integer>> thread : threads) {
-        //     List<Integer> partialResult = thread.join();
-        //     if (partialResult != null) {
-        //         path = partialResult;
-        //     }
-        // }
-        // if (path == null) // debug
-        //     System.out.println("path is null!");
-        // // return path result
-        // return path;
+    // Some helper functions
+
+    private List<Integer> joinThreads() {
+        List<Integer> result = null;
+
+        for (ForkJoinTask<List<Integer>> thread : threads) {
+            List<Integer> partialPath = thread.join();
+            if (partialPath != null) result = partialPath;
+        }
+        return result;
+    }
+
+    /** NOTE: 
+     * Returns the connected path, as a list of node identifiers, that
+     * goes from node <code>from</code> to node <code>to</code>
+     * following the inverse of relation <code>predecessor</code>. If
+     * such a path cannot be reconstructed from
+     * <code>predecessor</code>, the method returns <code>null</code>.
+     *
+     * @param from   the identifier of the initial node on the path
+     * @param to     the identifier of the final node on the path
+     * @return       the list of node identifiers from <code>from</code> to
+     *               <code>to</code> if such a path can be reconstructed from
+     *               <code>predecessor</code>; <code>null</code> otherwise
+     */
+    protected List<Integer> pathFromTo(int from, int to) {
+        List<Integer> path = new LinkedList<>();
+        Integer current = to;
+        while (current != from) {
+            path.add(current);
+            current = predecessor.get(current);
+            if (current == null)
+                return null;
+        }
+        path.add(from);
+        Collections.reverse(path);
+        return path;
     }
 }

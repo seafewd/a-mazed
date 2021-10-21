@@ -13,6 +13,9 @@ import java.util.HashSet;
 import java.util.Stack;
 import java.util.Collections;
 
+import java.util.concurrent.ConcurrentSkipListMap;
+import java.util.concurrent.ConcurrentSkipListSet;
+
 /**
  * <code>SequentialSolver</code> implements a solver for
  * <code>Maze</code> objects using a single-thread depth-first search.
@@ -179,4 +182,18 @@ public class SequentialSolver
         Collections.reverse(path);
         return path;
     }
+
+    // protected List<Integer> pathFromTo(int from, int to, ConcurrentSkipListMap<Integer, Integer> pred) {
+    //     List<Integer> path = new LinkedList<>();
+    //     Integer current = to;
+    //     while (current != from) {
+    //         path.add(current);
+    //         current = pred.get(current);
+    //         if (current == null)
+    //             return null;
+    //     }
+    //     path.add(from);
+    //     Collections.reverse(path);
+    //     return path;
+    // }
 }
